@@ -1,0 +1,38 @@
+# Build outputs
+/build/
+/app/build/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Local configuration — contains SDK path + release signing passwords, never commit
+/local.properties
+
+# Release signing keystore — never commit
+/keystore/
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Claude Code local settings
+.claude/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Log/lint output
+*.log
+lint-baseline.xml

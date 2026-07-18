@@ -1,0 +1,9 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.BulkMessenger" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.BulkMessenger.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#FFFFFF</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.BulkMessenger</item>
+    </style>
+</resources>

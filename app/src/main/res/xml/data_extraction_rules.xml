@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ (API 31) cloud backup / device-transfer rules. Excludes the local Room DB
+     (phone numbers, message content) from Android's implicit Auto Backup — the app already
+     has an explicit, user-triggered backup/restore feature, so nothing is lost by opting out
+     of the automatic one. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="bulk_messenger.db" />
+        <exclude domain="database" path="bulk_messenger.db-wal" />
+        <exclude domain="database" path="bulk_messenger.db-shm" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" path="bulk_messenger.db" />
+        <exclude domain="database" path="bulk_messenger.db-wal" />
+        <exclude domain="database" path="bulk_messenger.db-shm" />
+    </device-transfer>
+</data-extraction-rules>
