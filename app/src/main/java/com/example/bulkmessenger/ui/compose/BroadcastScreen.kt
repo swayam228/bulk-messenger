@@ -119,7 +119,7 @@ fun BroadcastScreen(
                     value = pasteText,
                     onValueChange = { pasteText = it },
                     label = { Text("Paste numbers, one per line") },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 180.dp),
                     minLines = 4
                 )
                 Button(
