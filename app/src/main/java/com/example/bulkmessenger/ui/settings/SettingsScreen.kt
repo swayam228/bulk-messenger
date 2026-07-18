@@ -4,29 +4,59 @@ import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.bulkmessenger.data.AppDatabase
+import com.example.bulkmessenger.util.BackupHelper
+import com.example.bulkmessenger.util.BackupPrefs
 import com.example.bulkmessenger.util.SimHelper
 import com.example.bulkmessenger.viewmodel.SessionViewModel
+import com.example.bulkmessenger.worker.AutoBackupWorker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun SettingsScreen(sessionViewModel: SessionViewModel, onBack: () -> Unit) {
     val activeUser by sessionViewModel.activeUser.collectAsState()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val sims = remember { SimHelper.getActiveSims(context) }
     val powerManager = remember { context.getSystemService(PowerManager::class.java) }
     val isBatteryExempted = remember { powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true }
+    var backupUri by remember { mutableStateOf(BackupPrefs.getBackupUri(context)) }
+    var autoBackupStatus by remember { mutableStateOf<String?>(null) }
+
+    val backupLocationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        context.contentResolver.takePersistableUriPermission(
+            uri,
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        )
+        BackupPrefs.setBackupUri(context, uri)
+        AutoBackupWorker.scheduleIfConfigured(context)
+        backupUri = uri
+        autoBackupStatus = null
+    }
 
     Scaffold(
         topBar = {
@@ -100,9 +130,63 @@ fun SettingsScreen(sessionViewModel: SessionViewModel, onBack: () -> Unit) {
 
             HorizontalDivider()
 
+            Text("Automatic backups", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            val currentBackupUri = backupUri
+            if (currentBackupUri == null) {
+                Text(
+                    "Set a backup location so your data is automatically backed up every 6 hours in the background.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedButton(
+                    onClick = { backupLocationLauncher.launch("bulkmessenger-backup.json") },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Filled.CloudDone, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Choose backup location")
+                }
+            } else {
+                Text(
+                    "Backing up automatically every 6 hours to “${BackupPrefs.displayName(context, currentBackupUri)}”.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { backupLocationLauncher.launch("bulkmessenger-backup.json") },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Change location") }
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                autoBackupStatus = try {
+                                    val db = AppDatabase.getInstance(context)
+                                    val json = BackupHelper.exportToJson(db)
+                                    withContext(Dispatchers.IO) {
+                                        context.contentResolver.openOutputStream(currentBackupUri, "wt")?.use { out ->
+                                            out.write(json.toString(2).toByteArray())
+                                        }
+                                    }
+                                    "Backup saved."
+                                } catch (e: Exception) {
+                                    "Backup failed: ${e.message}"
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Back up now") }
+                }
+                autoBackupStatus?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            HorizontalDivider()
+
             Text("Backup & Restore", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             Text(
-                "This app stores everything locally on your device only — nothing survives an uninstall unless you back it up yourself.",
+                "This app stores everything locally on your device only. Export a one-off backup, or restore from a previous one.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
