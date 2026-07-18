@@ -32,7 +32,11 @@ fun TemplateMessageField(
     onMessageChange: (String) -> Unit,
     drafts: List<Draft>,
     modifier: Modifier = Modifier,
-    minLines: Int = 3
+    minLines: Int = 3,
+    // Only valid when the caller's own layout has a bounded height to distribute (e.g. a
+    // non-scrolling screen Column) — set true there so the message box fills the remaining space
+    // instead of just wrapping its minLines. Never set this inside a scrollable container.
+    fillRemainingHeight: Boolean = false
 ) {
     var useTemplate by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
@@ -88,7 +92,11 @@ fun TemplateMessageField(
             value = message,
             onValueChange = onMessageChange,
             label = { Text("Message") },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = if (fillRemainingHeight) {
+                Modifier.fillMaxWidth().weight(1f)
+            } else {
+                Modifier.fillMaxWidth()
+            },
             minLines = minLines
         )
     }

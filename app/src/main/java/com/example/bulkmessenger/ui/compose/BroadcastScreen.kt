@@ -8,7 +8,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -78,13 +80,15 @@ fun BroadcastScreen(
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             Text("Add recipients", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -164,7 +168,7 @@ fun BroadcastScreen(
                 Surface(
                     shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.fillMaxWidth().weight(1f)
+                    modifier = Modifier.fillMaxWidth().height(140.dp)
                 ) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
@@ -177,7 +181,7 @@ fun BroadcastScreen(
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(state.recipients) { contact ->
@@ -210,10 +214,13 @@ fun BroadcastScreen(
                 scheduledAtMillis = scheduledAtMillis,
                 onScheduledAtChange = { scheduledAtMillis = it }
             )
+            }
+
+            HorizontalDivider()
 
             Button(
                 onClick = { viewModel.sendToAll(scheduledAtMillis, selectedSimId) },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth().height(50.dp),
                 enabled = state.recipients.isNotEmpty() && state.message.isNotBlank()
             ) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp))

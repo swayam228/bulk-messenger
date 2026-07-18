@@ -51,27 +51,29 @@ profile switcher, and onboarding.
 <td valign="top" width="25%">
 
 **📣 Broadcast**
-Same message → many numbers. Pick contacts or type numbers manually; send now or schedule.
+Same message → many numbers. Pick contacts, type numbers one at a time, or paste a whole list at
+once; send now or schedule. Numbers already messaged today are flagged inline.
 
 </td>
 <td valign="top" width="25%">
 
 **📝 Personalized Batch**
 A different message per number, as a two-page flow (list + dedicated recipient editor). CSV
-paste or real `.csv` file import.
+paste/import, or paste a bare number list to create blank rows in one go.
 
 </td>
 <td valign="top" width="25%">
 
 **📄 Drafts**
-Save, edit, and reuse message templates across sends.
+Save, edit, and reuse message templates — pick one from a dropdown right on the send screen
+instead of retyping.
 
 </td>
 <td valign="top" width="25%">
 
 **🕓 Job History**
-Per-recipient status, day-by-day totals, mode filters, and a **Retry Failed** button that only
-appears when there's something to retry.
+Per-recipient status, day-by-day totals, how many times each number was messaged today, mode
+filters, and a **Retry Failed** button that only appears when there's something to retry.
 
 </td>
 </tr>
@@ -86,8 +88,9 @@ appears when there's something to retry.
 - 🛡️ **Reliability** — sending promotes the worker to a foreground service with a live progress
   notification, so aggressive OEM battery managers (Vivo/Oppo/Realme) are far less likely to
   kill a send mid-flight. One-tap battery-exemption shortcut in Settings.
-- 💾 **Backup & restore** — explicit JSON export/import via the system file picker, including a
-  restore option right on the first-launch screen.
+- 💾 **Backup & restore** — automatic backup every 6 hours to a location you choose (set up during
+  onboarding or from Settings), plus explicit one-off JSON export/import via the system file
+  picker.
 - 🌗 **Light / Dark theme**, remembered per profile.
 
 ## 🧱 Tech stack
@@ -156,10 +159,14 @@ The release `signingConfig` reads `RELEASE_STORE_FILE` / `RELEASE_STORE_PASSWORD
 - Carriers commonly cap outbound SMS per SIM per day — the app automates the clicking, not the
   carrier's own throttling.
 - No delivery-report tracking yet (send success/failure only, not recipient-confirmed receipt).
-- Scheduled sends rely on `WorkManager`'s delayed enqueue, not exact alarms — can fire a few
-  minutes late under Doze unless the app is battery-exempted (shortcut provided in Settings).
+- Scheduled sends and the automatic 6-hourly backup both rely on `WorkManager`, not exact alarms —
+  either can fire a bit late under Doze unless the app is battery-exempted (shortcut provided in
+  Settings).
 - Local database schema changes use a destructive migration for now — fine at this stage, worth
   revisiting before long-term reliance.
+- The sent-today flag and per-number counts compare phone numbers as plain strings, so the same
+  number saved with and without a country code (e.g. `9876543210` vs `+919876543210`) won't be
+  recognized as a match.
 
 ## 📂 Project layout
 

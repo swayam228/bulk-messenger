@@ -90,13 +90,15 @@ fun PersonalizedScreen(
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             Text("Add rows", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -175,7 +177,7 @@ fun PersonalizedScreen(
                 Surface(
                     shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.fillMaxWidth().weight(1f)
+                    modifier = Modifier.fillMaxWidth().height(140.dp)
                 ) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
@@ -188,7 +190,7 @@ fun PersonalizedScreen(
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(state.rows, key = { it.rowId }) { row ->
@@ -214,10 +216,13 @@ fun PersonalizedScreen(
                 scheduledAtMillis = scheduledAtMillis,
                 onScheduledAtChange = { scheduledAtMillis = it }
             )
+            }
+
+            HorizontalDivider()
 
             Button(
                 onClick = { viewModel.sendAll(scheduledAtMillis, selectedSimId) },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth().height(50.dp),
                 enabled = state.rows.any { it.phoneNumber.isNotBlank() && it.message.isNotBlank() }
             ) {
                 val count = state.rows.count { it.phoneNumber.isNotBlank() && it.message.isNotBlank() }
