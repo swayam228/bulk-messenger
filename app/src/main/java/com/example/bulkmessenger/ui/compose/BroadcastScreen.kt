@@ -190,12 +190,12 @@ fun BroadcastScreen(
                 }
             }
 
-            OutlinedTextField(
-                value = state.message,
-                onValueChange = { viewModel.updateMessage(it) },
-                label = { Text("Message") },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 3
+            val drafts by viewModel.drafts.collectAsState()
+            TemplateMessageField(
+                message = state.message,
+                onMessageChange = { viewModel.updateMessage(it) },
+                drafts = drafts,
+                modifier = Modifier.fillMaxWidth()
             )
 
             SimSelector(
