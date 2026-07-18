@@ -24,6 +24,8 @@ data class BroadcastUiState(
     val lastCreatedJobId: Long? = null
 )
 
+data class AddNumbersResult(val added: Int, val skipped: Int)
+
 class BroadcastViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = MessageRepository(AppDatabase.getInstance(app))
     private val userId = SessionPrefs.getActiveUserId(app) ?: -1L
@@ -42,6 +44,29 @@ class BroadcastViewModel(app: Application) : AndroidViewModel(app) {
     fun addManualNumber(number: String) {
         if (number.isBlank()) return
         addRecipient(PickedContact(name = null, phoneNumber = number.trim()))
+    }
+
+    /** Splits a pasted, newline-separated block into individual numbers, skipping blanks and numbers already in the list. */
+    fun addNumbers(rawText: String): AddNumbersResult {
+        val existing = _state.value.recipients.map { it.phoneNumber }.toMutableSet()
+        var added = 0
+        var skipped = 0
+        val toAdd = mutableListOf<PickedContact>()
+        rawText.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .forEach { number ->
+                if (existing.add(number)) {
+                    toAdd.add(PickedContact(name = null, phoneNumber = number))
+                    added++
+                } else {
+                    skipped++
+                }
+            }
+        if (toAdd.isNotEmpty()) {
+            _state.value = _state.value.copy(recipients = _state.value.recipients + toAdd)
+        }
+        return AddNumbersResult(added, skipped)
     }
 
     fun updateMessage(text: String) {

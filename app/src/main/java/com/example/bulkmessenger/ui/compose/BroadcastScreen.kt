@@ -42,6 +42,9 @@ fun BroadcastScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var manualNumber by remember { mutableStateOf("") }
+    var pasteListMode by remember { mutableStateOf(false) }
+    var pasteText by remember { mutableStateOf("") }
+    var addNumbersFeedback by remember { mutableStateOf<String?>(null) }
     var scheduledAtMillis by remember { mutableStateOf<Long?>(null) }
     var selectedSimId by remember(activeUser) { mutableStateOf(activeUser?.defaultSimSubscriptionId) }
 
@@ -82,19 +85,57 @@ fun BroadcastScreen(
         ) {
             Text("Add recipients", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
 
-            OutlinedTextField(
-                value = manualNumber,
-                onValueChange = { manualNumber = it },
-                label = { Text("Type a phone number") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                trailingIcon = {
-                    TextButton(
-                        onClick = { viewModel.addManualNumber(manualNumber); manualNumber = "" },
-                        enabled = manualNumber.isNotBlank()
-                    ) { Text("Add") }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = !pasteListMode,
+                    onClick = { pasteListMode = false; addNumbersFeedback = null },
+                    label = { Text("One by one") }
+                )
+                FilterChip(
+                    selected = pasteListMode,
+                    onClick = { pasteListMode = true; addNumbersFeedback = null },
+                    label = { Text("Paste list") }
+                )
+            }
+
+            if (!pasteListMode) {
+                OutlinedTextField(
+                    value = manualNumber,
+                    onValueChange = { manualNumber = it },
+                    label = { Text("Type a phone number") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    trailingIcon = {
+                        TextButton(
+                            onClick = { viewModel.addManualNumber(manualNumber); manualNumber = "" },
+                            enabled = manualNumber.isNotBlank()
+                        ) { Text("Add") }
+                    }
+                )
+            } else {
+                OutlinedTextField(
+                    value = pasteText,
+                    onValueChange = { pasteText = it },
+                    label = { Text("Paste numbers, one per line") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 4
+                )
+                Button(
+                    onClick = {
+                        val result = viewModel.addNumbers(pasteText)
+                        pasteText = ""
+                        addNumbersFeedback = buildString {
+                            append("${result.added} number${if (result.added == 1) "" else "s"} added")
+                            if (result.skipped > 0) append(", ${result.skipped} already in the list")
+                        }
+                    },
+                    enabled = pasteText.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Add Numbers") }
+                addNumbersFeedback?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 }
-            )
+            }
 
             OutlinedButton(
                 onClick = {

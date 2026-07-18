@@ -29,6 +29,7 @@ data class PersonalizedUiState(
     val lastCreatedJobId: Long? = null
 )
 
+
 class PersonalizedViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = MessageRepository(AppDatabase.getInstance(app))
     private val userId = SessionPrefs.getActiveUserId(app) ?: -1L
@@ -52,6 +53,29 @@ class PersonalizedViewModel(app: Application) : AndroidViewModel(app) {
 
     fun removeRow(rowId: String) {
         _state.value = _state.value.copy(rows = _state.value.rows.filterNot { it.rowId == rowId })
+    }
+
+    /** Splits a pasted, newline-separated block of numbers into blank-message rows, skipping blanks and numbers already in the list. */
+    fun addNumbersAsRows(rawText: String): AddNumbersResult {
+        val existing = _state.value.rows.map { it.phoneNumber }.toMutableSet()
+        var added = 0
+        var skipped = 0
+        val toAdd = mutableListOf<PersonalizedRow>()
+        rawText.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .forEach { number ->
+                if (existing.add(number)) {
+                    toAdd.add(PersonalizedRow(phoneNumber = number))
+                    added++
+                } else {
+                    skipped++
+                }
+            }
+        if (toAdd.isNotEmpty()) {
+            _state.value = _state.value.copy(rows = _state.value.rows + toAdd)
+        }
+        return AddNumbersResult(added, skipped)
     }
 
     /** Imports CSV lines of the form "phoneNumber,message" (one per line), appending to rows. */

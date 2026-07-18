@@ -50,6 +50,9 @@ fun PersonalizedScreen(
     val scope = rememberCoroutineScope()
     var csvText by remember { mutableStateOf("") }
     var showCsvDialog by remember { mutableStateOf(false) }
+    var pasteListMode by remember { mutableStateOf(false) }
+    var pasteText by remember { mutableStateOf("") }
+    var addNumbersFeedback by remember { mutableStateOf<String?>(null) }
     var scheduledAtMillis by remember { mutableStateOf<Long?>(null) }
     var selectedSimId by remember(activeUser) { mutableStateOf(activeUser?.defaultSimSubscriptionId) }
 
@@ -92,13 +95,56 @@ fun PersonalizedScreen(
         ) {
             Text("Add rows", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
 
-            OutlinedButton(
-                onClick = onAddRow,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Add Recipient")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = !pasteListMode,
+                    onClick = { pasteListMode = false; addNumbersFeedback = null },
+                    label = { Text("Single entry") }
+                )
+                FilterChip(
+                    selected = pasteListMode,
+                    onClick = { pasteListMode = true; addNumbersFeedback = null },
+                    label = { Text("Paste list") }
+                )
+            }
+
+            if (!pasteListMode) {
+                OutlinedButton(
+                    onClick = onAddRow,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Add Recipient")
+                }
+            } else {
+                OutlinedTextField(
+                    value = pasteText,
+                    onValueChange = { pasteText = it },
+                    label = { Text("Paste numbers, one per line") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 4
+                )
+                Button(
+                    onClick = {
+                        val result = viewModel.addNumbersAsRows(pasteText)
+                        pasteText = ""
+                        addNumbersFeedback = buildString {
+                            append("${result.added} number${if (result.added == 1) "" else "s"} added")
+                            if (result.skipped > 0) append(", ${result.skipped} already in the list")
+                        }
+                    },
+                    enabled = pasteText.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Add Numbers") }
+                addNumbersFeedback?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
+                Text(
+                    "Numbers are added with a blank message — tap a row below to fill it in, or use a template.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
