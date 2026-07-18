@@ -1,6 +1,7 @@
 package com.example.bulkmessenger.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -69,8 +70,14 @@ fun AppNavHost(
 
         // Nested graph so the list page and the add/edit-row page share one PersonalizedViewModel instance.
         navigation(startDestination = Routes.PERSONALIZED, route = Routes.PERSONALIZED_GRAPH) {
-            composable(Routes.PERSONALIZED) {
-                val parentEntry = navController.getBackStackEntry(Routes.PERSONALIZED_GRAPH)
+            composable(Routes.PERSONALIZED) { backStackEntry ->
+                // Looked up once per backStackEntry rather than on every recomposition — calling
+                // getBackStackEntry() unconditionally in the composable body re-runs it during the
+                // pop-exit transition too, and by then the parent graph entry can already be gone
+                // from the NavController, throwing and crashing the app instead of just navigating back.
+                val parentEntry = remember(backStackEntry) {
+                    navController.getBackStackEntry(Routes.PERSONALIZED_GRAPH)
+                }
                 val viewModel: PersonalizedViewModel = viewModel(parentEntry)
                 PersonalizedScreen(
                     viewModel = viewModel,
@@ -89,7 +96,9 @@ fun AppNavHost(
                     defaultValue = null
                 })
             ) { backStackEntry ->
-                val parentEntry = navController.getBackStackEntry(Routes.PERSONALIZED_GRAPH)
+                val parentEntry = remember(backStackEntry) {
+                    navController.getBackStackEntry(Routes.PERSONALIZED_GRAPH)
+                }
                 val viewModel: PersonalizedViewModel = viewModel(parentEntry)
                 val rowId = backStackEntry.arguments?.getString("rowId")
                 PersonalizedRowEditorScreen(
