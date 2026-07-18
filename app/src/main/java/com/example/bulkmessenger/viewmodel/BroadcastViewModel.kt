@@ -7,14 +7,20 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.example.bulkmessenger.data.AppDatabase
+import com.example.bulkmessenger.data.Draft
+import com.example.bulkmessenger.data.ItemStatus
 import com.example.bulkmessenger.data.JobMode
 import com.example.bulkmessenger.data.MessageRepository
 import com.example.bulkmessenger.util.PickedContact
 import com.example.bulkmessenger.util.SessionPrefs
+import com.example.bulkmessenger.util.startOfTodayMillis
 import com.example.bulkmessenger.worker.SmsSendWorker
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
@@ -32,6 +38,19 @@ class BroadcastViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _state = MutableStateFlow(BroadcastUiState())
     val state: StateFlow<BroadcastUiState> = _state.asStateFlow()
+
+    /** Numbers already messaged today, for the informational "sent today" flag on recipient rows. */
+    val sentTodayNumbers: StateFlow<Set<String>> = repo.jobs.observeAllItems(userId)
+        .map { items ->
+            val startOfDay = startOfTodayMillis()
+            items.filter { it.status == ItemStatus.SENT && (it.sentAt ?: 0L) >= startOfDay }
+                .map { it.phoneNumber }
+                .toSet()
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    val drafts: StateFlow<List<Draft>> = repo.drafts.observeAll(userId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun addRecipient(contact: PickedContact) {
         _state.value = _state.value.copy(recipients = _state.value.recipients + contact)

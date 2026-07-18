@@ -18,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,6 +39,7 @@ fun BroadcastScreen(
     viewModel: BroadcastViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val sentTodayNumbers by viewModel.sentTodayNumbers.collectAsState()
     val activeUser by sessionViewModel.activeUser.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -179,7 +181,11 @@ fun BroadcastScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(state.recipients) { contact ->
-                        RecipientRow(contact = contact, onRemove = { viewModel.removeRecipient(contact) })
+                        RecipientRow(
+                            contact = contact,
+                            sentToday = contact.phoneNumber in sentTodayNumbers,
+                            onRemove = { viewModel.removeRecipient(contact) }
+                        )
                     }
                 }
             }
@@ -222,7 +228,7 @@ fun BroadcastScreen(
 }
 
 @Composable
-private fun RecipientRow(contact: PickedContact, onRemove: () -> Unit) {
+private fun RecipientRow(contact: PickedContact, sentToday: Boolean = false, onRemove: () -> Unit) {
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceVariant,
@@ -234,19 +240,39 @@ private fun RecipientRow(contact: PickedContact, onRemove: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                Box(
-                    modifier = Modifier.size(32.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        (contact.name?.firstOrNull() ?: '#').uppercaseChar().toString(),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                Box {
+                    Box(
+                        modifier = Modifier.size(32.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            (contact.name?.firstOrNull() ?: '#').uppercaseChar().toString(),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    if (sentToday) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .size(10.dp)
+                                .background(Color(0xFFFFA726), CircleShape)
+                        )
+                    }
                 }
                 Spacer(Modifier.width(10.dp))
                 Column {
-                    Text(contact.name ?: contact.phoneNumber, style = MaterialTheme.typography.bodyMedium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(contact.name ?: contact.phoneNumber, style = MaterialTheme.typography.bodyMedium)
+                        if (sentToday) {
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "Sent today",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFFFFA726)
+                            )
+                        }
+                    }
                     if (contact.name != null) {
                         Text(contact.phoneNumber, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

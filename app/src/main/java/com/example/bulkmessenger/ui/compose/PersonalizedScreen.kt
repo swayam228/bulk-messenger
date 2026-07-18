@@ -2,10 +2,12 @@ package com.example.bulkmessenger.ui.compose
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -18,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -45,6 +48,7 @@ fun PersonalizedScreen(
     onEditRow: (String) -> Unit
 ) {
     val state by viewModel.state.collectAsState()
+    val sentTodayNumbers by viewModel.sentTodayNumbers.collectAsState()
     val activeUser by sessionViewModel.activeUser.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -190,6 +194,7 @@ fun PersonalizedScreen(
                     items(state.rows, key = { it.rowId }) { row ->
                         PersonalizedRowCard(
                             row = row,
+                            sentToday = row.phoneNumber in sentTodayNumbers,
                             onClick = { onEditRow(row.rowId) },
                             onRemove = { viewModel.removeRow(row.rowId) }
                         )
@@ -279,7 +284,7 @@ fun PersonalizedScreen(
 }
 
 @Composable
-private fun PersonalizedRowCard(row: PersonalizedRow, onClick: () -> Unit, onRemove: () -> Unit) {
+private fun PersonalizedRowCard(row: PersonalizedRow, sentToday: Boolean = false, onClick: () -> Unit, onRemove: () -> Unit) {
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceVariant,
@@ -292,11 +297,21 @@ private fun PersonalizedRowCard(row: PersonalizedRow, onClick: () -> Unit, onRem
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text(
-                    row.phoneNumber.ifBlank { "No number" },
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        row.phoneNumber.ifBlank { "No number" },
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    if (sentToday) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(Color(0xFFFFA726), CircleShape)
+                        )
+                    }
+                }
                 Text(
                     row.message.ifBlank { "No message yet" },
                     style = MaterialTheme.typography.bodySmall,

@@ -43,6 +43,7 @@ fun JobHistoryScreen(onBack: () -> Unit = {}, viewModel: JobsViewModel = viewMod
     val jobsOrNull by viewModel.jobs.collectAsState()
     val totalSent by viewModel.totalSentCount.collectAsState()
     val sentByDate by viewModel.sentByDate.collectAsState()
+    val sentTodayCounts by viewModel.sentTodayCounts.collectAsState()
     var expandedJobId by remember { mutableStateOf<Long?>(null) }
     var filter by remember { mutableStateOf(ModeFilter.ALL) }
     var retryPickerJobId by remember { mutableStateOf<Long?>(null) }
@@ -167,11 +168,22 @@ fun JobHistoryScreen(onBack: () -> Unit = {}, viewModel: JobsViewModel = viewMod
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
-                                                Text(
-                                                    item.phoneNumber,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    fontWeight = FontWeight.Medium
-                                                )
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(
+                                                        item.phoneNumber,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                    val todayCount = sentTodayCounts[item.phoneNumber] ?: 0
+                                                    if (todayCount > 0) {
+                                                        Spacer(Modifier.width(6.dp))
+                                                        Text(
+                                                            "$todayCount today",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
+                                                }
                                                 Text(
                                                     item.status.name + (item.errorReason?.let { " ($it)" } ?: ""),
                                                     style = MaterialTheme.typography.bodySmall,
