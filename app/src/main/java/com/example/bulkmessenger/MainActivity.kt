@@ -24,6 +24,7 @@ import com.example.bulkmessenger.ui.splash.WelcomeScreen
 import com.example.bulkmessenger.ui.theme.BulkMessengerTheme
 import com.example.bulkmessenger.viewmodel.SessionViewModel
 import com.example.bulkmessenger.viewmodel.ThemeMode
+import com.example.bulkmessenger.worker.AutoBackupWorker
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -84,6 +85,7 @@ private fun RootScreen(
     onToggleTheme: () -> Unit
 ) {
     val context = LocalContext.current
+    LaunchedEffect(Unit) { AutoBackupWorker.scheduleIfConfigured(context) }
     val requiredPermissions = buildList {
         add(Manifest.permission.SEND_SMS)
         add(Manifest.permission.READ_CONTACTS)

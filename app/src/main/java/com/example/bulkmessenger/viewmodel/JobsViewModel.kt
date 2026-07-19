@@ -13,6 +13,7 @@ import com.example.bulkmessenger.data.ItemStatus
 import com.example.bulkmessenger.data.JobStatus
 import com.example.bulkmessenger.data.MessageRepository
 import com.example.bulkmessenger.util.SessionPrefs
+import com.example.bulkmessenger.util.startOfTodayMillis
 import com.example.bulkmessenger.worker.SmsSendWorker
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -61,6 +62,16 @@ class JobsViewModel(app: Application) : AndroidViewModel(app) {
                 }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** How many times each number has been messaged today, shown beside the number in Job History. */
+    val sentTodayCounts: StateFlow<Map<String, Int>> = allItems
+        .map { items ->
+            val startOfDay = startOfTodayMillis()
+            items.filter { it.status == ItemStatus.SENT && (it.sentAt ?: 0L) >= startOfDay }
+                .groupingBy { it.phoneNumber }
+                .eachCount()
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     /**
      * Resets a job's FAILED items back to PENDING and re-enqueues the sender worker for just

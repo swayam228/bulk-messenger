@@ -101,12 +101,14 @@ fun PersonalizedRowEditorScreen(
                 Text("Pick from Contacts")
             }
 
-            OutlinedTextField(
-                value = message,
-                onValueChange = { message = it },
-                label = { Text("Message") },
+            val drafts by viewModel.drafts.collectAsState()
+            TemplateMessageField(
+                message = message,
+                onMessageChange = { message = it },
+                drafts = drafts,
                 modifier = Modifier.fillMaxWidth().weight(1f),
-                minLines = 6
+                minLines = 6,
+                fillRemainingHeight = true
             )
 
             Button(

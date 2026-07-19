@@ -7,13 +7,19 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.example.bulkmessenger.data.AppDatabase
+import com.example.bulkmessenger.data.Draft
+import com.example.bulkmessenger.data.ItemStatus
 import com.example.bulkmessenger.data.JobMode
 import com.example.bulkmessenger.data.MessageRepository
 import com.example.bulkmessenger.util.SessionPrefs
+import com.example.bulkmessenger.util.startOfTodayMillis
 import com.example.bulkmessenger.worker.SmsSendWorker
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -29,12 +35,26 @@ data class PersonalizedUiState(
     val lastCreatedJobId: Long? = null
 )
 
+
 class PersonalizedViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = MessageRepository(AppDatabase.getInstance(app))
     private val userId = SessionPrefs.getActiveUserId(app) ?: -1L
 
     private val _state = MutableStateFlow(PersonalizedUiState())
     val state: StateFlow<PersonalizedUiState> = _state.asStateFlow()
+
+    /** Numbers already messaged today, for the informational "sent today" flag on recipient rows. */
+    val sentTodayNumbers: StateFlow<Set<String>> = repo.jobs.observeAllItems(userId)
+        .map { items ->
+            val startOfDay = startOfTodayMillis()
+            items.filter { it.status == ItemStatus.SENT && (it.sentAt ?: 0L) >= startOfDay }
+                .map { it.phoneNumber }
+                .toSet()
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    val drafts: StateFlow<List<Draft>> = repo.drafts.observeAll(userId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun getRow(rowId: String): PersonalizedRow? = _state.value.rows.find { it.rowId == rowId }
 
@@ -52,6 +72,29 @@ class PersonalizedViewModel(app: Application) : AndroidViewModel(app) {
 
     fun removeRow(rowId: String) {
         _state.value = _state.value.copy(rows = _state.value.rows.filterNot { it.rowId == rowId })
+    }
+
+    /** Splits a pasted, newline-separated block of numbers into blank-message rows, skipping blanks and numbers already in the list. */
+    fun addNumbersAsRows(rawText: String): AddNumbersResult {
+        val existing = _state.value.rows.map { it.phoneNumber }.toMutableSet()
+        var added = 0
+        var skipped = 0
+        val toAdd = mutableListOf<PersonalizedRow>()
+        rawText.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .forEach { number ->
+                if (existing.add(number)) {
+                    toAdd.add(PersonalizedRow(phoneNumber = number))
+                    added++
+                } else {
+                    skipped++
+                }
+            }
+        if (toAdd.isNotEmpty()) {
+            _state.value = _state.value.copy(rows = _state.value.rows + toAdd)
+        }
+        return AddNumbersResult(added, skipped)
     }
 
     /** Imports CSV lines of the form "phoneNumber,message" (one per line), appending to rows. */

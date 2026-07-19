@@ -2,10 +2,12 @@ package com.example.bulkmessenger.ui.compose
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -18,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -45,11 +48,15 @@ fun PersonalizedScreen(
     onEditRow: (String) -> Unit
 ) {
     val state by viewModel.state.collectAsState()
+    val sentTodayNumbers by viewModel.sentTodayNumbers.collectAsState()
     val activeUser by sessionViewModel.activeUser.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var csvText by remember { mutableStateOf("") }
     var showCsvDialog by remember { mutableStateOf(false) }
+    var pasteListMode by remember { mutableStateOf(false) }
+    var pasteText by remember { mutableStateOf("") }
+    var addNumbersFeedback by remember { mutableStateOf<String?>(null) }
     var scheduledAtMillis by remember { mutableStateOf<Long?>(null) }
     var selectedSimId by remember(activeUser) { mutableStateOf(activeUser?.defaultSimSubscriptionId) }
 
@@ -83,22 +90,67 @@ fun PersonalizedScreen(
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             Text("Add rows", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
 
-            OutlinedButton(
-                onClick = onAddRow,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Add Recipient")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = !pasteListMode,
+                    onClick = { pasteListMode = false; addNumbersFeedback = null },
+                    label = { Text("Single entry") }
+                )
+                FilterChip(
+                    selected = pasteListMode,
+                    onClick = { pasteListMode = true; addNumbersFeedback = null },
+                    label = { Text("Paste list") }
+                )
+            }
+
+            if (!pasteListMode) {
+                OutlinedButton(
+                    onClick = onAddRow,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Add Recipient")
+                }
+            } else {
+                OutlinedTextField(
+                    value = pasteText,
+                    onValueChange = { pasteText = it },
+                    label = { Text("Paste numbers, one per line") },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 180.dp),
+                    minLines = 4
+                )
+                Button(
+                    onClick = {
+                        val result = viewModel.addNumbersAsRows(pasteText)
+                        pasteText = ""
+                        addNumbersFeedback = buildString {
+                            append("${result.added} number${if (result.added == 1) "" else "s"} added")
+                            if (result.skipped > 0) append(", ${result.skipped} already in the list")
+                        }
+                    },
+                    enabled = pasteText.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Add Numbers") }
+                addNumbersFeedback?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
+                Text(
+                    "Numbers are added with a blank message — tap a row below to fill it in, or use a template.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -125,7 +177,7 @@ fun PersonalizedScreen(
                 Surface(
                     shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.fillMaxWidth().weight(1f)
+                    modifier = Modifier.fillMaxWidth().height(140.dp)
                 ) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
@@ -138,12 +190,13 @@ fun PersonalizedScreen(
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(state.rows, key = { it.rowId }) { row ->
                         PersonalizedRowCard(
                             row = row,
+                            sentToday = row.phoneNumber in sentTodayNumbers,
                             onClick = { onEditRow(row.rowId) },
                             onRemove = { viewModel.removeRow(row.rowId) }
                         )
@@ -163,10 +216,13 @@ fun PersonalizedScreen(
                 scheduledAtMillis = scheduledAtMillis,
                 onScheduledAtChange = { scheduledAtMillis = it }
             )
+            }
+
+            HorizontalDivider()
 
             Button(
                 onClick = { viewModel.sendAll(scheduledAtMillis, selectedSimId) },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp).fillMaxWidth().height(50.dp),
                 enabled = state.rows.any { it.phoneNumber.isNotBlank() && it.message.isNotBlank() }
             ) {
                 val count = state.rows.count { it.phoneNumber.isNotBlank() && it.message.isNotBlank() }
@@ -233,7 +289,7 @@ fun PersonalizedScreen(
 }
 
 @Composable
-private fun PersonalizedRowCard(row: PersonalizedRow, onClick: () -> Unit, onRemove: () -> Unit) {
+private fun PersonalizedRowCard(row: PersonalizedRow, sentToday: Boolean = false, onClick: () -> Unit, onRemove: () -> Unit) {
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceVariant,
@@ -246,11 +302,21 @@ private fun PersonalizedRowCard(row: PersonalizedRow, onClick: () -> Unit, onRem
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
-                Text(
-                    row.phoneNumber.ifBlank { "No number" },
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        row.phoneNumber.ifBlank { "No number" },
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    if (sentToday) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(Color(0xFFFFA726), CircleShape)
+                        )
+                    }
+                }
                 Text(
                     row.message.ifBlank { "No message yet" },
                     style = MaterialTheme.typography.bodySmall,
