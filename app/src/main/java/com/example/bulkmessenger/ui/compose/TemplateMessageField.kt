@@ -1,5 +1,6 @@
 package com.example.bulkmessenger.ui.compose
 
+import android.telephony.SmsManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,6 +20,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.bulkmessenger.data.Draft
 
@@ -40,6 +43,12 @@ fun TemplateMessageField(
 ) {
     var useTemplate by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val smsManager = remember(context) { context.getSystemService(SmsManager::class.java) ?: SmsManager.getDefault() }
+    // Uses the real carrier-facing segmentation (SmsManager.divideMessage) rather than a hardcoded
+    // 160-char guess, since the actual per-segment limit drops to 70 as soon as the message
+    // contains a character outside the GSM-7 alphabet (emoji, most non-Latin scripts, curly quotes).
+    val segmentCount = remember(message) { if (message.isEmpty()) 0 else smsManager.divideMessage(message).size }
 
     Column(modifier = modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -99,5 +108,17 @@ fun TemplateMessageField(
             },
             minLines = minLines
         )
+        if (message.isNotEmpty()) {
+            Spacer(Modifier.height(4.dp))
+            val charCount = message.length
+            Text(
+                buildString {
+                    append("$charCount character${if (charCount == 1) "" else "s"}")
+                    if (segmentCount > 1) append(" · will send as $segmentCount messages")
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (segmentCount > 1) Color(0xFFFFA726) else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }

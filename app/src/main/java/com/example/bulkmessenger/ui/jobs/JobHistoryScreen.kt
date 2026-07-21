@@ -8,6 +8,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
@@ -23,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.bulkmessenger.data.BulkJob
 import com.example.bulkmessenger.data.ItemStatus
 import com.example.bulkmessenger.data.JobMode
 import com.example.bulkmessenger.data.JobStatus
@@ -30,7 +33,9 @@ import com.example.bulkmessenger.util.SimHelper
 import com.example.bulkmessenger.viewmodel.DateSentCount
 import com.example.bulkmessenger.viewmodel.JobsViewModel
 import java.text.DateFormat
+import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
 
 private enum class ModeFilter(val label: String, val mode: JobMode?) {
     ALL("All", null),
@@ -47,6 +52,9 @@ fun JobHistoryScreen(onBack: () -> Unit = {}, viewModel: JobsViewModel = viewMod
     var expandedJobId by remember { mutableStateOf<Long?>(null) }
     var filter by remember { mutableStateOf(ModeFilter.ALL) }
     var retryPickerJobId by remember { mutableStateOf<Long?>(null) }
+    // Null means "no manual choice yet" — the most recent day defaults to expanded, everything
+    // older starts collapsed, so a long history doesn't turn into one giant wall of cards.
+    var expandedDays by remember { mutableStateOf<Set<String>?>(null) }
     val context = LocalContext.current
     val sims = remember { SimHelper.getActiveSims(context) }
 
@@ -55,6 +63,10 @@ fun JobHistoryScreen(onBack: () -> Unit = {}, viewModel: JobsViewModel = viewMod
     val filteredJobs = remember(jobs, filter) {
         jobs.filter { filter.mode == null || it.mode == filter.mode }
     }
+    val dayGroups = remember(filteredJobs) { groupJobsByDay(filteredJobs) }
+    val defaultExpandedDays = remember(dayGroups) { dayGroups.take(1).map { it.key }.toSet() }
+    val currentExpandedDays = expandedDays ?: defaultExpandedDays
+    val sentByDayLabel = remember(sentByDate) { sentByDate.associate { it.dateLabel to it.count } }
 
     Scaffold(
         topBar = {
@@ -98,130 +110,32 @@ fun JobHistoryScreen(onBack: () -> Unit = {}, viewModel: JobsViewModel = viewMod
                     item {
                         SentSummaryCard(totalSent = totalSent, byDate = sentByDate)
                     }
-                    items(filteredJobs, key = { it.id }) { job ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth().animateContentSize(),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(
-                                            "${modeLabel(job.mode)} — #${job.id}",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                        if (job.status == JobStatus.SCHEDULED && job.scheduledAt != null) {
-                                            Text(
-                                                "Scheduled for ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(job.scheduledAt))}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        } else {
-                                            Text(
-                                                DateFormat.getDateTimeInstance().format(Date(job.createdAt)),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        if (job.mode == JobMode.SAME_MESSAGE && !job.messagePreview.isNullOrBlank()) {
-                                            Spacer(Modifier.height(4.dp))
-                                            Text(
-                                                "“${job.messagePreview}”",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontStyle = FontStyle.Italic,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    }
-                                    Spacer(Modifier.width(8.dp))
-                                    StatusChip(
-                                        label = job.status.name,
-                                        colors = statusColors(job.status),
-                                        onClick = { expandedJobId = if (expandedJobId == job.id) null else job.id }
-                                    )
+                    dayGroups.forEach { day ->
+                        val dayExpanded = day.key in currentExpandedDays
+                        item(key = "day-${day.key}") {
+                            DayHeader(
+                                label = day.label,
+                                jobCount = day.jobs.size,
+                                sentCount = sentByDayLabel[day.label] ?: 0,
+                                expanded = dayExpanded,
+                                onClick = {
+                                    val base = expandedDays ?: defaultExpandedDays
+                                    expandedDays = if (dayExpanded) base - day.key else base + day.key
                                 }
-
-                                if (expandedJobId == job.id) {
-                                    val items by viewModel.itemsFor(job.id).collectAsState()
-                                    Spacer(Modifier.height(12.dp))
-                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                                    Spacer(Modifier.height(12.dp))
-
-                                    val sent = items.count { it.status == ItemStatus.SENT }
-                                    val failed = items.count { it.status == ItemStatus.FAILED }
-                                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                        SummaryStat(Icons.Filled.CheckCircle, "$sent sent", Color(0xFF2E7D32))
-                                        SummaryStat(Icons.Filled.Error, "$failed failed", MaterialTheme.colorScheme.error)
-                                        SummaryStat(Icons.Filled.History, "${items.size} total", MaterialTheme.colorScheme.onSurfaceVariant)
+                            )
+                        }
+                        if (dayExpanded) {
+                            items(day.jobs, key = { it.id }) { job ->
+                                JobCard(
+                                    job = job,
+                                    expanded = expandedJobId == job.id,
+                                    onToggleExpand = { expandedJobId = if (expandedJobId == job.id) null else job.id },
+                                    viewModel = viewModel,
+                                    sentTodayCounts = sentTodayCounts,
+                                    onRetryClick = {
+                                        if (sims.size >= 2) retryPickerJobId = job.id else viewModel.retryFailedItems(job.id, null)
                                     }
-                                    Spacer(Modifier.height(10.dp))
-                                    items.forEach { item ->
-                                        Column(Modifier.padding(vertical = 4.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween
-                                            ) {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Text(
-                                                        item.phoneNumber,
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        fontWeight = FontWeight.Medium
-                                                    )
-                                                    val todayCount = sentTodayCounts[item.phoneNumber] ?: 0
-                                                    if (todayCount > 0) {
-                                                        Spacer(Modifier.width(6.dp))
-                                                        Text(
-                                                            "$todayCount today",
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    }
-                                                }
-                                                Text(
-                                                    item.status.name + (item.errorReason?.let { " ($it)" } ?: ""),
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = itemStatusColor(item.status)
-                                                )
-                                            }
-                                            if (job.mode == JobMode.PERSONALIZED) {
-                                                Text(
-                                                    item.messageBody,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    // Hidden entirely until there's actually something to retry — e.g. hit a
-                                    // carrier's daily SMS cap partway through and the rest failed.
-                                    if (failed > 0) {
-                                        Spacer(Modifier.height(10.dp))
-                                        OutlinedButton(
-                                            onClick = {
-                                                if (sims.size >= 2) {
-                                                    retryPickerJobId = job.id
-                                                } else {
-                                                    viewModel.retryFailedItems(job.id, null)
-                                                }
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                                            Spacer(Modifier.width(8.dp))
-                                            Text("Retry Failed ($failed)")
-                                        }
-                                    }
-                                }
+                                )
                             }
                         }
                     }
@@ -259,6 +173,176 @@ fun JobHistoryScreen(onBack: () -> Unit = {}, viewModel: JobsViewModel = viewMod
 private fun modeLabel(mode: JobMode): String = when (mode) {
     JobMode.SAME_MESSAGE -> "Broadcast"
     JobMode.PERSONALIZED -> "Personalized"
+}
+
+private data class DayGroup(val key: String, val label: String, val jobs: List<BulkJob>)
+
+/** Groups by the job's creation date (local time), newest day first — same label format as [DateSentCount]. */
+private fun groupJobsByDay(jobs: List<BulkJob>): List<DayGroup> {
+    val dayKeyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    val dayLabelFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+    return jobs.groupBy { dayKeyFormat.format(Date(it.createdAt)) }
+        .toSortedMap(compareByDescending { it })
+        .map { (key, jobsInDay) -> DayGroup(key, dayLabelFormat.format(dayKeyFormat.parse(key)!!), jobsInDay) }
+}
+
+@Composable
+private fun DayHeader(label: String, jobCount: Int, sentCount: Int, expanded: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.secondaryContainer
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "$jobCount job${if (jobCount == 1) "" else "s"} · $sentCount sent",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+            Icon(
+                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+                tint = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
+    }
+}
+
+@Composable
+private fun JobCard(
+    job: BulkJob,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit,
+    viewModel: JobsViewModel,
+    sentTodayCounts: Map<String, Int>,
+    onRetryClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().animateContentSize(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "${modeLabel(job.mode)} — #${job.id}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    if (job.status == JobStatus.SCHEDULED && job.scheduledAt != null) {
+                        Text(
+                            "Scheduled for ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(job.scheduledAt))}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    } else {
+                        Text(
+                            DateFormat.getDateTimeInstance().format(Date(job.createdAt)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (job.mode == JobMode.SAME_MESSAGE && !job.messagePreview.isNullOrBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "“${job.messagePreview}”",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                StatusChip(
+                    label = job.status.name,
+                    colors = statusColors(job.status),
+                    onClick = onToggleExpand
+                )
+            }
+
+            if (expanded) {
+                val items by viewModel.itemsFor(job.id).collectAsState()
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(Modifier.height(12.dp))
+
+                val sent = items.count { it.status == ItemStatus.SENT }
+                val failed = items.count { it.status == ItemStatus.FAILED }
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    SummaryStat(Icons.Filled.CheckCircle, "$sent sent", Color(0xFF2E7D32))
+                    SummaryStat(Icons.Filled.Error, "$failed failed", MaterialTheme.colorScheme.error)
+                    SummaryStat(Icons.Filled.History, "${items.size} total", MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(Modifier.height(10.dp))
+                items.forEach { item ->
+                    Column(Modifier.padding(vertical = 4.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    item.phoneNumber,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                val todayCount = sentTodayCounts[item.phoneNumber] ?: 0
+                                if (todayCount > 0) {
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "$todayCount today",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            Text(
+                                item.status.name + (item.errorReason?.let { " ($it)" } ?: ""),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = itemStatusColor(item.status)
+                            )
+                        }
+                        if (job.mode == JobMode.PERSONALIZED) {
+                            Text(
+                                item.messageBody,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                // Hidden entirely until there's actually something to retry — e.g. hit a
+                // carrier's daily SMS cap partway through and the rest failed.
+                if (failed > 0) {
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = onRetryClick,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Retry Failed ($failed)")
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

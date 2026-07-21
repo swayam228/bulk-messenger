@@ -7,6 +7,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.bulkmessenger.data.AppDatabase
+import com.example.bulkmessenger.util.AppLogger
 import com.example.bulkmessenger.util.BackupHelper
 import com.example.bulkmessenger.util.BackupPrefs
 import java.util.concurrent.TimeUnit
@@ -25,7 +26,7 @@ class AutoBackupWorker(appContext: Context, params: WorkerParameters) :
 
         /** Safe to call repeatedly (e.g. on every app launch) — KEEP means it's a no-op once scheduled. */
         fun scheduleIfConfigured(context: Context) {
-            if (BackupPrefs.getBackupUri(context) == null) return
+            if (BackupPrefs.getBackupFolderUri(context) == null) return
             val request = PeriodicWorkRequestBuilder<AutoBackupWorker>(6, TimeUnit.HOURS).build()
             WorkManager.getInstance(context)
                 .enqueueUniquePeriodicWork(UNIQUE_WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
@@ -33,15 +34,19 @@ class AutoBackupWorker(appContext: Context, params: WorkerParameters) :
     }
 
     override suspend fun doWork(): Result {
-        val uri = BackupPrefs.getBackupUri(applicationContext) ?: return Result.success()
+        if (BackupPrefs.getBackupFolderUri(applicationContext) == null) return Result.success()
         return try {
             val db = AppDatabase.getInstance(applicationContext)
             val json = BackupHelper.exportToJson(db)
-            applicationContext.contentResolver.openOutputStream(uri, "wt")?.use { out ->
+            val file = BackupPrefs.getOrCreateChildFile(applicationContext, BackupPrefs.BACKUP_FILE_NAME, "application/json")
+                ?: return Result.success()
+            applicationContext.contentResolver.openOutputStream(file.uri, "wt")?.use { out ->
                 out.write(json.toString(2).toByteArray())
             }
+            AppLogger.log(applicationContext, "Automatic backup completed")
             Result.success()
         } catch (e: Exception) {
+            AppLogger.log(applicationContext, "Automatic backup failed: ${e.message}")
             Result.success()
         }
     }

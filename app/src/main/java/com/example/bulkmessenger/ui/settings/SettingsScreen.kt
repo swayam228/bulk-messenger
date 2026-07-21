@@ -41,18 +41,18 @@ fun SettingsScreen(sessionViewModel: SessionViewModel, onBack: () -> Unit) {
     val sims = remember { SimHelper.getActiveSims(context) }
     val powerManager = remember { context.getSystemService(PowerManager::class.java) }
     val isBatteryExempted = remember { powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true }
-    var backupUri by remember { mutableStateOf(BackupPrefs.getBackupUri(context)) }
+    var backupUri by remember { mutableStateOf(BackupPrefs.getBackupFolderUri(context)) }
     var autoBackupStatus by remember { mutableStateOf<String?>(null) }
 
     val backupLocationLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
+        ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         context.contentResolver.takePersistableUriPermission(
             uri,
             Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
         )
-        BackupPrefs.setBackupUri(context, uri)
+        BackupPrefs.setBackupFolderUri(context, uri)
         AutoBackupWorker.scheduleIfConfigured(context)
         backupUri = uri
         autoBackupStatus = null
@@ -134,27 +134,28 @@ fun SettingsScreen(sessionViewModel: SessionViewModel, onBack: () -> Unit) {
             val currentBackupUri = backupUri
             if (currentBackupUri == null) {
                 Text(
-                    "Set a backup location so your data is automatically backed up every 6 hours in the background.",
+                    "Set a backup folder so your data (and a debug log) is automatically backed up every 6 hours in the background.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 OutlinedButton(
-                    onClick = { backupLocationLauncher.launch("bulkmessenger-backup.json") },
+                    onClick = { backupLocationLauncher.launch(null) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Filled.CloudDone, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Choose backup location")
+                    Text("Choose backup folder")
                 }
             } else {
                 Text(
-                    "Backing up automatically every 6 hours to “${BackupPrefs.displayName(context, currentBackupUri)}”.",
+                    "Backing up automatically every 6 hours to “${BackupPrefs.displayName(context, currentBackupUri)}”. " +
+                        "A debug log is kept in the same folder.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
-                        onClick = { backupLocationLauncher.launch("bulkmessenger-backup.json") },
+                        onClick = { backupLocationLauncher.launch(null) },
                         modifier = Modifier.weight(1f)
                     ) { Text("Change location") }
                     OutlinedButton(
@@ -164,7 +165,9 @@ fun SettingsScreen(sessionViewModel: SessionViewModel, onBack: () -> Unit) {
                                     val db = AppDatabase.getInstance(context)
                                     val json = BackupHelper.exportToJson(db)
                                     withContext(Dispatchers.IO) {
-                                        context.contentResolver.openOutputStream(currentBackupUri, "wt")?.use { out ->
+                                        val file = BackupPrefs.getOrCreateChildFile(context, BackupPrefs.BACKUP_FILE_NAME, "application/json")
+                                            ?: throw IllegalStateException("Couldn't create the backup file")
+                                        context.contentResolver.openOutputStream(file.uri, "wt")?.use { out ->
                                             out.write(json.toString(2).toByteArray())
                                         }
                                     }
