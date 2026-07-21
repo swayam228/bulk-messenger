@@ -6,7 +6,7 @@ import android.content.pm.PackageManager
 import android.telephony.SubscriptionManager
 import androidx.core.content.ContextCompat
 
-data class SimOption(val subscriptionId: Int, val label: String)
+data class SimOption(val subscriptionId: Int, val slotIndex: Int, val label: String)
 
 /**
  * Wraps SubscriptionManager defensively — some OEMs behave inconsistently here, so any failure
@@ -24,10 +24,17 @@ object SimHelper {
             val manager = context.getSystemService(SubscriptionManager::class.java) ?: return emptyList()
             val infos = manager.activeSubscriptionInfoList ?: return emptyList()
             infos.map { info ->
-                val label = info.carrierName?.toString()?.takeIf { it.isNotBlank() }
+                val carrierName = info.carrierName?.toString()?.takeIf { it.isNotBlank() }
                     ?: info.displayName?.toString()?.takeIf { it.isNotBlank() }
-                    ?: "SIM ${info.simSlotIndex + 1}"
-                SimOption(subscriptionId = info.subscriptionId, label = label)
+                    ?: "Unknown carrier"
+                // Two SIMs on the same network report the same carrier name (e.g. both "BSNL
+                // Mobile"), so the slot number is always prefixed — otherwise there's no way to
+                // tell them apart in the picker.
+                SimOption(
+                    subscriptionId = info.subscriptionId,
+                    slotIndex = info.simSlotIndex,
+                    label = "SIM ${info.simSlotIndex + 1} – $carrierName"
+                )
             }
         } catch (e: SecurityException) {
             emptyList()
