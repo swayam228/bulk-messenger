@@ -42,14 +42,14 @@ fun OnboardingScreen(onCreateUser: (name: String, colorHex: String) -> Unit) {
     var pendingColorHex by remember { mutableStateOf("") }
 
     val backupLocationLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
+        ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         context.contentResolver.takePersistableUriPermission(
             uri,
             android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
         )
-        BackupPrefs.setBackupUri(context, uri)
+        BackupPrefs.setBackupFolderUri(context, uri)
         AutoBackupWorker.scheduleIfConfigured(context)
         onCreateUser(pendingName, pendingColorHex)
     }
@@ -123,7 +123,7 @@ fun OnboardingScreen(onCreateUser: (name: String, colorHex: String) -> Unit) {
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Choose a file location where Bulk Messenger will keep your data backed up " +
+                        "Choose a folder where Bulk Messenger will keep your data backed up " +
                             "automatically every 6 hours, so nothing is lost if the app is ever uninstalled.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -131,12 +131,12 @@ fun OnboardingScreen(onCreateUser: (name: String, colorHex: String) -> Unit) {
                     )
                     Spacer(Modifier.height(32.dp))
                     Button(
-                        onClick = { backupLocationLauncher.launch("bulkmessenger-backup.json") },
+                        onClick = { backupLocationLauncher.launch(null) },
                         modifier = Modifier.fillMaxWidth().height(50.dp)
                     ) {
                         Icon(Icons.Filled.Backup, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Choose backup location")
+                        Text("Choose backup folder")
                     }
                     Spacer(Modifier.height(12.dp))
                     Text(

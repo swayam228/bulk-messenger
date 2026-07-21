@@ -83,6 +83,9 @@ dependencies {
     // WorkManager
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
+    // SAF folder access (auto-backup + debug log live as sibling files in a user-chosen folder)
+    implementation("androidx.documentfile:documentfile:1.0.1")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     // Instrumented tests (androidTest) — debug-only, no effect on the release build.
